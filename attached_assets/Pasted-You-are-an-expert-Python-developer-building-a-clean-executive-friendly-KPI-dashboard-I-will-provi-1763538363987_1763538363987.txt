@@ -1,0 +1,284 @@
+You are an expert Python developer building a clean, executive-friendly KPI dashboard.
+
+I will provide you with an Excel workbook that contains our departmental KPI “database”.
+Use this spec to build a Streamlit app (MVP) that reads the Excel file and creates a 4-tab interactive dashboard for our Executive Head of Department.
+
+------------------------------------
+CONTEXT ABOUT THE EXCEL DATA
+------------------------------------
+The Excel file has at least one key sheet called:
+
+- "2026 BEPLANNING"
+
+This sheet is our main fact table for KPIs.
+Each row is ONE KPI item / project with its own target, output and achievement.
+
+The important columns (Afrikaans labels) on the "2026 BEPLANNING" sheet include:
+
+- "2030 TOEKOMSVISIE"      → strategic pillar
+- "2026 FOKUS"             → intermediate focus area
+- "ANKERGEMEENSKAP"        → anchor community
+- "BESKRYWING VAN PROJEK"  → project / KPI description
+- "TEIKEN"                 → numeric target value
+- "UITSET"                 → numeric actual output
+- "KWARTAAL"               → quarter label (e.g. "K1", "K2", "K3", "K4")
+- "PROJEKEIENAAR"          → project owner / person
+- "STREEK"                 → region
+- "DISTRIK"                → district
+- "PROVINSIE"              → province
+- "% BEHAAL"               → percentage achieved for that row (per item, already calculated in Excel)
+
+Assume:
+- "% BEHAAL" is a numeric percentage per KPI row (e.g. 75 for 75%).
+- We do NOT need burndown charts or advanced quarter-logic right now.
+- This is an MVP: clean, simple, and performant.
+
+------------------------------------
+TECHNICAL REQUIREMENTS
+------------------------------------
+1. Use Python with:
+   - streamlit
+   - pandas
+   - plotly.express (or Streamlit’s built-in chart functions) for visualizations
+
+2. Load the Excel file once at startup:
+   - Use something like:
+       df = pd.read_excel("EXCEL_FILE_NAME.xlsx", sheet_name="2026 BEPLANNING")
+   - Clean column names minimally if needed (but keep the displayed labels in Afrikaans).
+   - Make sure the following columns are treated as numeric:
+       "TEIKEN", "UITSET", "% BEHAAL"
+
+3. Derived metrics (calculate in Python, not stored back to Excel):
+   For the loaded DataFrame, you will frequently need aggregated measures by group (e.g. per pillar, per province):
+   - avg_pct_behaal     = mean("% BEHAAL") for that group
+   - count_kpi          = number of rows in that group
+   - total_teiken       = sum("TEIKEN") for that group
+   - total_uitset       = sum("UITSET") for that group
+   - min_pct_behaal     = min("% BEHAAL") for that group
+   - max_pct_behaal     = max("% BEHAAL") for that group
+
+   IMPORTANT: For performance comparisons and charts, ALWAYS use avg_pct_behaal (simple average of "% BEHAAL" over items) as the main KPI for now.
+
+4. Global filters:
+   At the top of the app (or clearly visible on each tab), create filter widgets that can be reused across tabs:
+   - Quarter filter: "KWARTAAL" (multi-select, default = all)
+   - Province filter: "PROVINSIE" (multi-select, default = all)
+   - 2026 Focus filter: "2026 FOKUS" (multi-select, default = all)
+   - 2030 Vision filter: "2030 TOEKOMSVISIE" (multi-select, default = all)
+
+   Implement a helper function that takes the raw df and returns a filtered df based on the current widget selections, so all tabs use consistent filtering.
+
+------------------------------------
+APP STRUCTURE – 4 TABS
+------------------------------------
+Use Streamlit’s tabs feature, e.g.:
+
+tab1, tab2, tab3, tab4 = st.tabs(["Bestuursoorsig", "Strategie", "Geografie", "Projekte & Eienaars"])
+
+All labels shown to the user must be in Afrikaans where possible.
+
+==============================
+TAB 1: "Bestuursoorsig"
+==============================
+Purpose: Executive overview for the department.
+
+Components (working off the filtered df):
+
+1) KPI Cards at the top (use st.columns for layout):
+   - Card 1: "Gem. % BEHAAL (Algeheel)"
+       - Show the overall average of "% BEHAAL" (avg_pct_behaal) across filtered rows.
+   - Card 2: "Aantal KPI-items"
+       - Show number of rows (COUNT_KPI) in the filtered df.
+   - Card 3: "Beste 2030 Toekomsvissie"
+       - Find the 2030 pillar with the highest average "% BEHAAL" and show its name and value.
+   - Card 4: "Swakste 2030 Toekomsvissie"
+       - Find the 2030 pillar with the lowest average "% BEHAAL" and show its name and value.
+
+2) Bar chart: Performance per 2030 pillar
+   - Group by "2030 TOEKOMSVISIE".
+   - For each pillar, compute:
+       avg_pct_behaal, count_kpi, min_pct_behaal, max_pct_behaal.
+   - Plot a bar chart with:
+       X-axis: pillar name
+       Y-axis: avg_pct_behaal
+   - Use tooltips to show count_kpi, min_pct_behaal, max_pct_behaal.
+   - Sort pillars by avg_pct_behaal ascending, so weak performers appear on the left.
+
+3) Bar chart: Performance per 2026 focus
+   - Group by "2026 FOKUS" similarly.
+   - Same metrics and sorting (ascending by avg_pct_behaal).
+
+4) Table: "Swakste 10 KPI-items"
+   - Sort the filtered df by "% BEHAAL" ascending and show the top 10 rows.
+   - Columns to display:
+       "% BEHAAL",
+       "BESKRYWING VAN PROJEK",
+       "2030 TOEKOMSVISIE",
+       "2026 FOKUS",
+       "PROVINSIE",
+       "PROJEKEIENAAR"
+   - Format "% BEHAAL" as a percentage with maybe 1 decimal place.
+
+==============================
+TAB 2: "Strategie"
+==============================
+Purpose: View performance broken down by strategic structure – pillars and focus areas.
+
+Components:
+
+1) A radio button or selectbox at the top of this tab:
+   - Options:
+       "2030 TOEKOMSVISIE" and "2026 FOKUS"
+   - Label it something like: "Groepering"
+   - Based on selection, group the filtered data either by pillar or by focus area.
+
+2) Matrix-style table (group summary):
+   - If grouping by "2030 TOEKOMSVISIE":
+       Show a table with columns:
+         "2030 TOEKOMSVISIE",
+         "Gem. % BEHAAL",
+         "Aantal KPI-items",
+         "Min % BEHAAL",
+         "Maks % BEHAAL"
+   - If grouping by "2026 FOKUS":
+       Show a table with columns:
+         "2026 FOKUS",
+         "Gem. % BEHAAL",
+         "Aantal KPI-items",
+         "Min % BEHAAL",
+         "Maks % BEHAAL"
+   - Sort by average "% BEHAAL" ascending.
+
+3) Detail table for selected group:
+   - When the user clicks a row in the group table OR uses a selectbox below to choose a pillar/focus, show a detailed table of all KPI-items in that group.
+   - Columns:
+       "% BEHAAL",
+       "BESKRYWING VAN PROJEK",
+       "ANKERGEMEENSKAP",
+       "PROVINSIE",
+       "DISTRIK",
+       "PROJEKEIENAAR",
+       "TEIKEN",
+       "UITSET",
+       "KWARTAAL"
+
+   For the MVP, you can choose a simpler interaction:
+   - Provide a selectbox listing all group names (all pillars or all focus areas, depending on mode),
+   - Filter df where that column matches the selection,
+   - Show the detailed table.
+
+==============================
+TAB 3: "Geografie"
+==============================
+Purpose: Show performance by province, then district, then anchor community.
+
+Components:
+
+1) Province-level summary table:
+   - Group the filtered df by "PROVINSIE".
+   - Compute:
+       avg_pct_behaal,
+       count_kpi,
+       min_pct_behaal,
+       max_pct_behaal.
+   - Show a table with columns:
+       "PROVINSIE",
+       "Gem. % BEHAAL",
+       "Aantal KPI-items",
+       "Min % BEHAAL",
+       "Maks % BEHAAL"
+   - Sort ascending by avg_pct_behaal.
+
+2) Province selector:
+   - Add a selectbox directly under the summary table:
+       "Kies provinsie vir detail:"
+   - By default, you can either:
+       - select the province with the lowest avg_pct_behaal, or
+       - select the first province in sorted order.
+   - Filter df to only rows for that province.
+
+3) District-level table (within selected province):
+   - Group by "DISTRIK" (within the selected province).
+   - Show similar columns:
+       "DISTRIK",
+       "Gem. % BEHAAL",
+       "Aantal KPI-items",
+       "Min % BEHAAL",
+       "Maks % BEHAAL"
+
+4) Anchor community-level table (optional but valuable):
+   - Group by "ANKERGEMEENSKAP" within that province.
+   - Columns:
+       "ANKERGEMEENSKAP",
+       "Gem. % BEHAAL",
+       "Aantal KPI-items"
+
+==============================
+TAB 4: "Projekte & Eienaars"
+==============================
+Purpose: Accountability and detailed project view.
+
+Components:
+
+1) Owner summary table:
+   - Group filtered df by "PROJEKEIENAAR".
+   - For each owner, compute:
+       avg_pct_behaal,
+       count_kpi,
+       min_pct_behaal,
+       max_pct_behaal.
+   - Show table with columns:
+       "PROJEKEIENAAR",
+       "Gem. % BEHAAL",
+       "Aantal KPI-items",
+       "Min % BEHAAL",
+       "Maks % BEHAAL"
+   - Sort ascending by avg_pct_behaal to highlight weakest performers first.
+
+2) Searchable project table (detail view):
+   - Provide optional filters:
+        - Owner filter: selectbox or multiselect on "PROJEKEIENAAR"
+        - Province filter (can reuse global province filter OR add local)
+   - Provide a text_input for free text search across project description and community:
+        - Filter rows where the search string appears in:
+            "BESKRYWING VAN PROJEK" OR "ANKERGEMEENSKAP" OR "PROJEKEIENAAR"
+
+   - Display a detailed table with columns:
+       "% BEHAAL",
+       "BESKRYWING VAN PROJEK",
+       "2030 TOEKOMSVISIE",
+       "2026 FOKUS",
+       "ANKERGEMEENSKAP",
+       "PROVINSIE",
+       "DISTRIK",
+       "STREEK",
+       "PROJEKEIENAAR",
+       "TEIKEN",
+       "UITSET",
+       "KWARTAAL"
+
+   - Ensure "% BEHAAL" is sortable and clearly visible.
+   - Format "% BEHAAL" as a percentage.
+
+------------------------------------
+UX & DESIGN GUIDELINES
+------------------------------------
+- Use Afrikaans labels in the UI (as above).
+- Keep the design clean and minimal:
+   - Avoid too many bright colours.
+   - Use a single main accent colour for charts and highlights.
+- Make sure all filters affect the data consistently on each tab.
+- Handle cases where the filtered df is empty:
+   - Show a friendly message like "Geen data vir die huidige filters nie."
+
+------------------------------------
+DELIVERABLE
+------------------------------------
+Produce a single Python script (e.g. app.py) that:
+
+1) Imports necessary libraries.
+2) Loads the Excel file "EXCEL_FILE_NAME.xlsx" from the working directory.
+3) Builds the 4-tab Streamlit dashboard as specified, with reusable filtering logic.
+4) Can be run with: `streamlit run app.py`
+
+Write clean, well-structured, and well-commented code so that a non-developer can read and understand the main sections easily.
