@@ -1,0 +1,77 @@
+------------------------------------
+EXTRA TAB: "Kwartaalvordering"
+------------------------------------
+Add an additional Streamlit tab to the app:
+
+tab_q = "Kwartaalvordering"
+
+Goal:
+Show quarterly progress in two complementary ways:
+1) How many / what % of KPI-items in a quarter have reached 100% completion ("% BEHAAL" >= 100).
+2) What is the overall average completion rate ("% BEHAAL") per quarter.
+Optionally break these down by "2030 TOEKOMSVISIE" and "2026 FOKUS".
+
+Use the SAME global filters as the other tabs (KWARTAAL, PROVINSIE, 2026 FOKUS, 2030 TOEKOMSVISIE), but note that on this tab KWARTAAL will mainly be used to focus or compare quarters.
+
+Within this "Kwartaalvordering" tab, implement:
+
+1) Quarter Summary Table
+   - Work from the filtered df (after applying global filters EXCEPT we allow multiple quarters).
+   - Group by "KWARTAAL".
+   - For each quarter compute:
+       total_kpi        = number of rows in that quarter
+       completed_kpi    = number of rows where "% BEHAAL" >= 100
+       pct_completed    = completed_kpi / total_kpi * 100
+       avg_pct_behaal   = mean("% BEHAAL") for that quarter
+   - Show a table with columns:
+       "KWARTAAL",
+       "Aantal KPI-items",
+       "KPI-items voltooi (>=100%)",
+       "% KPI voltooi",
+       "Gem. % BEHAAL"
+   - Sort the table by KWARTAAL order (K1, K2, K3, K4).
+
+2) Quarter Bar Chart – Completion Rate per Quarter
+   - Using the same quarter summary data:
+     - X-axis: "KWARTAAL"
+     - Y-axis: "Gem. % BEHAAL"
+   - This shows the average completion rate across all KPI-items per quarter.
+   - Add tooltips for:
+       "Aantal KPI-items",
+       "% KPI voltooi"
+
+3) Quarter Bar/Column Chart – % KPI Completed per Quarter
+   - Using the same quarter summary data:
+     - X-axis: "KWARTAAL"
+     - Y-axis: "% KPI voltooi"
+   - This answers: "In watter kwartaal voltooi ons die meeste KPI-items volledig?"
+
+4) Optional Breakdown by 2030 Toekomsvisie and 2026 Fokus
+   Under the summary visuals, add a selectbox:
+
+   st.selectbox("Groepering vir kwartaaldetail:", ["2030 TOEKOMSVISIE", "2026 FOKUS"])
+
+   Based on the selection:
+   - Group the filtered df by ["KWARTAAL", chosen_group] where chosen_group is either "2030 TOEKOMSVISIE" or "2026 FOKUS".
+   - For each (quarter, group) combination, calculate:
+       total_kpi
+       completed_kpi (% BEHAAL >= 100)
+       pct_completed
+       avg_pct_behaal
+   - Show a table with columns:
+       "KWARTAAL",
+       chosen_group (pillar or fokus),
+       "Aantal KPI-items",
+       "KPI-items voltooi (>=100%)",
+       "% KPI voltooi",
+       "Gem. % BEHAAL"
+   - Optionally add a bar chart where:
+       X-axis: chosen_group
+       Y-axis: avg_pct_behaal or % KPI voltooi
+       Colour/hue: KWARTAAL (to compare quarters per pillar/focus).
+
+UX Notes:
+- Keep all labels Afrikaans:
+    "Kwartaalvordering", "Gem. % BEHAAL", "KPI-items voltooi", "% KPI voltooi", etc.
+- If the filtered df has no data for a quarter, handle gracefully (skip that quarter or show 0s).
+- If all data for a quarter is missing, show a friendly message: "Geen data vir die gekose filters en kwartaal nie."

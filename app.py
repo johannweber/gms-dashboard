@@ -6,10 +6,13 @@ import numpy as np
 st.set_page_config(page_title="KPI Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 @st.cache_data
-def load_data():
+def load_data(uploaded_file=None):
     """Load and prepare the Excel data."""
     try:
-        df = pd.read_excel("attached_assets/00 GEKONSOLIDEER copy_1763538344798.xlsx", sheet_name="2026 BEPLANNING")
+        if uploaded_file is not None:
+            df = pd.read_excel(uploaded_file, sheet_name="2026 BEPLANNING")
+        else:
+            df = pd.read_excel("attached_assets/00 GEKONSOLIDEER copy_1763538344798.xlsx", sheet_name="2026 BEPLANNING")
         
         df['TEIKEN'] = pd.to_numeric(df['TEIKEN'], errors='coerce')
         df['UITSET'] = pd.to_numeric(df['UITSET'], errors='coerce')
@@ -70,7 +73,10 @@ def format_number(val):
 def main():
     st.title("GMS Oorsigpaneel")
     
-    df = load_data()
+    st.sidebar.header("📁 Data Lêer")
+    uploaded_file = st.sidebar.file_uploader("Laai Excel lêer op (opsioneel)", type=['xlsx', 'xls'])
+    
+    df = load_data(uploaded_file)
     
     if df is None or df.empty:
         st.error("Geen data beskikbaar nie.")
@@ -112,7 +118,7 @@ def main():
         st.warning("⚠️ Geen data vir die huidige filters nie.")
         return
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Bestuursoorsig", "Strategie", "Geografie", "Projekte & Eienaars"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Bestuursoorsig", "Strategie", "Geografie", "Projekte & Eienaars", "Kwartaalvordering"])
     
     with tab1:
         render_executive_overview(filtered_df)
@@ -125,6 +131,9 @@ def main():
     
     with tab4:
         render_projects_tab(filtered_df)
+    
+    with tab5:
+        render_quarterly_progress_tab(filtered_df)
 
 def render_executive_overview(df):
     """Tab 1: Executive Overview (Bestuursoorsig)."""
@@ -370,6 +379,120 @@ def render_projects_tab(df):
     project_detail['% BEHAAL'] = project_detail['% BEHAAL'].apply(format_percentage)
     
     st.dataframe(project_detail, width='stretch', hide_index=True)
+
+def render_quarterly_progress_tab(df):
+    """Tab 5: Quarterly Progress (Kwartaalvordering)."""
+    st.header("Kwartaalvordering")
+    
+    if df.empty:
+        st.warning("⚠️ Geen data vir die gekose filters en kwartaal nie.")
+        return
+    
+    quarter_summary = df.groupby('KWARTAAL').agg({
+        '% BEHAAL': ['count', 'mean']
+    }).reset_index()
+    
+    quarter_summary.columns = ['KWARTAAL', 'Aantal KPI-items', 'Gem. % BEHAAL']
+    
+    completed_counts = df[df['% BEHAAL'] >= 100].groupby('KWARTAAL').size().reset_index(name='KPI-items voltooi (>=100%)')
+    quarter_summary = quarter_summary.merge(completed_counts, on='KWARTAAL', how='left')
+    quarter_summary['KPI-items voltooi (>=100%)'] = quarter_summary['KPI-items voltooi (>=100%)'].fillna(0).astype(int)
+    
+    quarter_summary['% KPI voltooi'] = (quarter_summary['KPI-items voltooi (>=100%)'] / quarter_summary['Aantal KPI-items'] * 100)
+    
+    quarter_order = ['K1', 'K2', 'K3', 'K4']
+    quarter_summary['sort_order'] = quarter_summary['KWARTAAL'].apply(lambda x: quarter_order.index(x) if x in quarter_order else 999)
+    quarter_summary = quarter_summary.sort_values('sort_order').drop('sort_order', axis=1)
+    
+    st.subheader("Kwartaal Opsomming")
+    
+    display_summary = quarter_summary.copy()
+    display_summary['Gem. % BEHAAL'] = display_summary['Gem. % BEHAAL'].apply(format_percentage)
+    display_summary['% KPI voltooi'] = display_summary['% KPI voltooi'].apply(format_percentage)
+    
+    st.dataframe(display_summary, width='stretch', hide_index=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Gem. % BEHAAL per Kwartaal")
+        fig = px.bar(
+            quarter_summary,
+            x='KWARTAAL',
+            y='Gem. % BEHAAL',
+            title='',
+            labels={'Gem. % BEHAAL': 'Gemiddelde % Behaal', 'KWARTAAL': 'Kwartaal'},
+            hover_data={
+                'Aantal KPI-items': True,
+                '% KPI voltooi': ':.1f',
+                'Gem. % BEHAAL': ':.1f'
+            }
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, width='stretch')
+    
+    with col2:
+        st.subheader("% KPI Voltooi per Kwartaal")
+        fig = px.bar(
+            quarter_summary,
+            x='KWARTAAL',
+            y='% KPI voltooi',
+            title='',
+            labels={'% KPI voltooi': '% KPI Voltooi', 'KWARTAAL': 'Kwartaal'},
+            hover_data={
+                'Aantal KPI-items': True,
+                'KPI-items voltooi (>=100%)': True,
+                '% KPI voltooi': ':.1f'
+            }
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, width='stretch')
+    
+    st.subheader("Detail per Strategiese Groepering")
+    
+    grouping_choice = st.selectbox(
+        "Groepering vir kwartaaldetail:",
+        options=['2030 TOEKOMSVISIE', '2026 FOKUS']
+    )
+    
+    detail_summary = df.groupby(['KWARTAAL', grouping_choice]).agg({
+        '% BEHAAL': ['count', 'mean']
+    }).reset_index()
+    
+    detail_summary.columns = ['KWARTAAL', grouping_choice, 'Aantal KPI-items', 'Gem. % BEHAAL']
+    
+    completed_detail = df[df['% BEHAAL'] >= 100].groupby(['KWARTAAL', grouping_choice]).size().reset_index(name='KPI-items voltooi (>=100%)')
+    detail_summary = detail_summary.merge(completed_detail, on=['KWARTAAL', grouping_choice], how='left')
+    detail_summary['KPI-items voltooi (>=100%)'] = detail_summary['KPI-items voltooi (>=100%)'].fillna(0).astype(int)
+    
+    detail_summary['% KPI voltooi'] = (detail_summary['KPI-items voltooi (>=100%)'] / detail_summary['Aantal KPI-items'] * 100)
+    
+    detail_summary['sort_order'] = detail_summary['KWARTAAL'].apply(lambda x: quarter_order.index(x) if x in quarter_order else 999)
+    detail_summary = detail_summary.sort_values(['sort_order', grouping_choice]).drop('sort_order', axis=1)
+    
+    display_detail = detail_summary.copy()
+    display_detail['Gem. % BEHAAL'] = display_detail['Gem. % BEHAAL'].apply(format_percentage)
+    display_detail['% KPI voltooi'] = display_detail['% KPI voltooi'].apply(format_percentage)
+    
+    st.dataframe(display_detail, width='stretch', hide_index=True)
+    
+    st.subheader(f"Gem. % BEHAAL per {grouping_choice} en Kwartaal")
+    fig = px.bar(
+        detail_summary,
+        x=grouping_choice,
+        y='Gem. % BEHAAL',
+        color='KWARTAAL',
+        barmode='group',
+        title='',
+        labels={'Gem. % BEHAAL': 'Gemiddelde % Behaal'},
+        hover_data={
+            'Aantal KPI-items': True,
+            '% KPI voltooi': ':.1f',
+            'Gem. % BEHAAL': ':.1f'
+        }
+    )
+    fig.update_layout(xaxis_tickangle=-45, height=500)
+    st.plotly_chart(fig, width='stretch')
 
 if __name__ == "__main__":
     main()
