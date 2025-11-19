@@ -68,7 +68,7 @@ def format_number(val):
     return f"{val:,.0f}"
 
 def main():
-    st.title("📊 Departementele KPI Dashboard")
+    st.title("GMS Oorsigpaneel")
     
     df = load_data()
     
@@ -130,34 +130,34 @@ def render_executive_overview(df):
     """Tab 1: Executive Overview (Bestuursoorsig)."""
     st.header("Bestuursoorsig")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     
     avg_behaal = df['% BEHAAL'].mean()
     
     with col1:
         st.metric("Gem. % BEHAAL (Algeheel)", format_percentage(avg_behaal))
     
-    with col2:
-        st.metric("Aantal KPI-items", len(df))
-    
     visie_grouped = calculate_group_metrics(df, '2030 TOEKOMSVISIE')
+    fokus_grouped = calculate_group_metrics(df, '2026 FOKUS')
     
     if not visie_grouped.empty:
         best_visie = visie_grouped.iloc[-1]
-        worst_visie = visie_grouped.iloc[0]
         
-        with col3:
+        with col2:
             st.metric(
                 "Beste 2030 Toekomsvisie",
                 best_visie['2030 TOEKOMSVISIE'],
                 f"{best_visie['Gem. % BEHAAL']:.1f}%"
             )
+    
+    if not fokus_grouped.empty:
+        best_fokus = fokus_grouped.iloc[-1]
         
-        with col4:
+        with col3:
             st.metric(
-                "Swakste 2030 Toekomsvisie",
-                worst_visie['2030 TOEKOMSVISIE'],
-                f"{worst_visie['Gem. % BEHAAL']:.1f}%"
+                "Beste 2026 Fokus",
+                best_fokus['2026 FOKUS'],
+                f"{best_fokus['Gem. % BEHAAL']:.1f}%"
             )
     
     st.subheader("Prestasie per 2030 Toekomsvisie")
@@ -183,8 +183,6 @@ def render_executive_overview(df):
     
     st.subheader("Prestasie per 2026 Fokus")
     
-    fokus_grouped = calculate_group_metrics(df, '2026 FOKUS')
-    
     if not fokus_grouped.empty:
         fig = px.bar(
             fokus_grouped,
@@ -204,15 +202,21 @@ def render_executive_overview(df):
         fig.update_layout(xaxis_tickangle=-45, height=400)
         st.plotly_chart(fig, width='stretch')
     
-    st.subheader("Swakste 10 KPI-items")
+    st.subheader("Top-5 Beste Ankerdorpe")
     
-    worst_items = df.nsmallest(10, '% BEHAAL')[
-        ['% BEHAAL', 'BESKRYWING VAN PROJEK', '2030 TOEKOMSVISIE', '2026 FOKUS', 'PROVINSIE', 'PROJEKEIENAAR']
-    ].copy()
+    anchor_grouped = df.groupby('ANKERGEMEENSKAP').agg({
+        '% BEHAAL': 'mean'
+    }).reset_index()
     
-    worst_items['% BEHAAL'] = worst_items['% BEHAAL'].apply(format_percentage)
+    anchor_grouped.columns = ['ANKERGEMEENSKAP', 'Gem. % BEHAAL']
+    anchor_grouped = anchor_grouped.sort_values('Gem. % BEHAAL', ascending=False).head(5)
     
-    st.dataframe(worst_items, width='stretch', hide_index=True)
+    if not anchor_grouped.empty:
+        for idx, row in anchor_grouped.iterrows():
+            st.metric(
+                row['ANKERGEMEENSKAP'],
+                format_percentage(row['Gem. % BEHAAL'])
+            )
 
 def render_strategy_tab(df):
     """Tab 2: Strategy (Strategie)."""
